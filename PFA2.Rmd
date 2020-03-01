@@ -1,0 +1,309 @@
+---
+title: "PFA"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+setwd("/Users/madskerrn/Documents/R/PFA")
+library(ggplot2)
+library(tidyverse)
+library(gridExtra)
+```
+
+# Emner
+- Stress og psykiske problemer
+- Chikane
+- Fysisk arbejde og arbejdstid
+- Overordnet helbred
+
+# Indlæs datasæt, tilføj variable og lav en funktion til subsets
+```{r}
+brancher <- read.csv("arbejdsmarkedsanalyse_brancher.csv", stringsAsFactors = FALSE, 
+                     dec = ",", sep = ";", header=T, fileEncoding="latin1")
+
+# Funktion til at finde subset af data, som er sorteret. Bruges når der skal plottes.
+subsetFromQuestion <- function(x){ 
+  subQ <- subset(brancher, Question.Label == x)
+  subQ$Group <- factor(subQ$Group, levels = subQ$Group[order(subQ$Score)])
+  subQ
+}
+
+konalder <- read.csv("arbejdsmarkedsanalyse_koen_alder.csv", stringsAsFactors = FALSE, 
+                     dec = ",", sep = ";", header=T, fileEncoding="latin1")
+
+# Lav en variabel for køn og en for alder
+konalder$Køn <- substring(konalder$Group,1,1)
+konalder$Alder <- 0
+konalder[konalder$Køn=="M",]$Alder <- substring(konalder[konalder$Køn=="M",]$Group,7)
+konalder[konalder$Køn=="K",]$Alder <- substring(konalder[konalder$Køn=="K",]$Group,10)
+konalder$Alder[konalder$Alder==""] <- "Total"
+```
+
+Inden vi går igang med analysen, tjekker vi antal personer i hver gruppe. Bemærk at nogle brancher indeholder et lavt antal personer, men at det laveste antal svar for en sprøgsmål og en branche er 21 personer. I datasættet med køn og alder er det laveste antal 364.
+```{r}
+brancherCount <- brancher %>% group_by(Group) %>% summarise(mean = mean(Antpers))
+brancherCount <- brancherCount[!brancherCount$Group=="Total",]
+brancherCount$Group <- factor(brancherCount$Group, 
+                              levels = brancherCount$Group[order(brancherCount$mean)])
+
+ggplot(brancherCount) + 
+  geom_point(aes(x = Group, y = mean), color="brown") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+brancherCountMin <- brancherCount %>% filter(mean<200)
+
+ggplot(brancherCountMin) + 
+  geom_point(aes(x = Group, y = mean), color="brown") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+Mindste antal personer pr. branhce og sprøgsmål.
+```{r}
+min(brancher$Antpers)
+```
+Mindste antal personer pr. køn, alder og sprøgsmål.
+```{r}
+min(konalder$Antpers)
+```
+
+# Stress
+
+Vi ser en tendens til at kvinder er mere stresset end mænd, både generelt og pga. af arbejde.
+Hvor stressniveauet som følge af arbejdet ser ud til at være stabilt fra folk er 25 år, ser det samlede stress niveau ud til at falde. Dette passer med af stress fra privatlivet blandt personer med stress, ser ud til at falde gennem livet.
+
+```{r}
+ggplot(subset(konalder, Question.Label == "Stress")) + 
+  geom_point(aes(x=Alder, y = Score, color = Køn)) + 
+  ggtitle("Stress score")
+
+ggplot(subset(konalder, Question.Label == "Arbejdsrelateret stress")) + 
+  geom_point(aes(x=Alder, y = Score, color = Køn)) + 
+  ggtitle("Procent som har føl sig stresset pga. af arbejde de sidste 14 dage")
+
+ggplot(subset(konalder, Question.Label == "Kun stress fra privatlivet blandt personer med stress")) + 
+  geom_point(aes(x=Alder, y = Score, color = Køn)) + 
+  ggtitle("Kun stress fra privatlivet blandt personer med stress (i procent")
+```
+
+Blandt folk med stress, hvor stor en procentvis andel har kun stress fra arbejdet?
+```{r}
+konalder %>% 
+  filter(Question.Label == "Kun stress fra arbejdet blandt personer med stress") %>% 
+  filter(Alder=="Total") %>% 
+  select(Score, Køn)
+```
+
+Arbejdsrelateret stress inde for de forskellige brancher, ser ud til at være værst for jobs der involverer en høj grad af menneskekontakt, mens branhcer som er karakteriseret ved fysisk arbejde, som håndværkere og landmænd, score lavest.
+```{r}
+ggplot(subsetFromQuestion("Arbejdsrelateret stress")) + 
+  geom_point(aes(x=Group, y = Score), color="brown") + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + 
+  ggtitle("Procent som har føl sig stresset pga. af arbejde de sidste 14 dage")
+```
+
+Hvis vi kigger på andre psykiske problmer (angst, dpression, søvnproblmer og uoverskuelighed), ser vi at kvinder også score værre end mændene her. Dog ser det, med undtagelse af søvnproblemer, for alles vedkomne ud til at blive bedre med alderen.
+```{r}
+grid.arrange(
+ggplot(subset(konalder, Question.Label == "Symptomer på angst")) + 
+  geom_point(aes(x=Alder, y = Score, color = Køn)) + 
+  ggtitle("Symptomer på angst")
+,
+ggplot(subset(konalder, Question.Label == "Depressive symptomer")) + 
+  geom_point(aes(x=Alder, y = Score, color = Køn)) + 
+  ggtitle("Depressive symptomer")
+,
+ggplot(subset(konalder, Question.Label == "Søvnproblemer")) + 
+  geom_point(aes(x=Alder, y = Score, color = Køn)) + 
+  ggtitle("Søvnproblemer")
+,
+ggplot(subset(konalder, Question.Label == "Uoverskuelighed")) + 
+  geom_point(aes(x=Alder, y = Score, color = Køn)) + 
+  ggtitle("Uoverskuelighed")
+)
+```
+
+Hvis vi kigger på de samme faktorer i brancherne, ser vi mht. angst, depression og uoverskuelighed, er der en tendens til at jobs som traditionelt er besat af mænd score lavt, men også ledere score lavt.
+```{r}
+ggplot(subsetFromQuestion("Symptomer på angst")) + 
+  geom_point(aes(x=Group, y = Score), color="brown") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) + 
+  ggtitle("Symptomer på angst")
+
+ggplot(subsetFromQuestion("Depressive symptomer")) + 
+  geom_point(aes(x=Group, y = Score), color="brown") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) + 
+  ggtitle("Depressive symptomer")
+
+ggplot(subsetFromQuestion("Søvnproblemer")) + 
+  geom_point(aes(x=Group, y = Score), color="brown") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) + 
+  ggtitle("Søvnproblemer")
+
+ggplot(subsetFromQuestion("Uoverskuelighed")) + 
+  geom_point(aes(x=Group, y = Score), color="brown") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) + 
+  ggtitle("Uoverskuelighed")
+```
+
+Generelt ser vi en tendens til at mænd har mindre stess, og at det samme gælder for folk med jobs som traditionelt er besat af mænd. Samtidig har kvinder, samt jobs der involverer meget menneskekontakt, et højere stressniveau.
+
+
+# Mobning, Vold og trusler, Seksuel Chikane
+
+Kvinder bliver mobbet mere, bliver udsat for mere seksuel chikane og fysisk vold end mænd. Kvinder modtager ifølge undersøgelsen også flere trusler end mænd, bortset fra når de er mellem 18-24 år.
+```{r}
+grid.arrange(
+ggplot(subset(konalder, Question.Label == "Mobning")) + 
+  geom_point(aes(x=Alder, y = Score, color = Køn)) + 
+  ggtitle("Mobning")
+,
+ggplot(subset(konalder, Question.Label == "Trusler")) + 
+  geom_point(aes(x=Alder, y = Score, color = Køn)) + 
+  ggtitle("Trusler")
+,
+ggplot(subset(konalder, Question.Label == "Fysisk vold")) + 
+  geom_point(aes(x=Alder, y = Score, color = Køn)) + 
+  ggtitle("Fysisk vold")
+,
+ggplot(subset(konalder, Question.Label == "Seksuel chikane")) + 
+  geom_point(aes(x=Alder, y = Score, color = Køn)) + 
+  ggtitle("Seksuel chikane")
+)
+```
+
+Der ser ud til at være en tendens til at jobs der klassisk er besat af flest kvinder score højest på Trusler, Fysisk vold og Seksuel chikane, mens mobning er mere blandet.
+```{r}
+ggplot(subsetFromQuestion("Mobning")) + 
+  geom_point(aes(x=Group, y = Score), color="brown") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) + 
+  ggtitle("Mobning")
+
+ggplot(subsetFromQuestion("Trusler")) + 
+  geom_point(aes(x=Group, y = Score), color="brown") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) + 
+  ggtitle("Trusler")
+
+ggplot(subsetFromQuestion("Fysisk vold")) + 
+  geom_point(aes(x=Group, y = Score), color="brown") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) + 
+  ggtitle("Fysisk vold")
+
+ggplot(subsetFromQuestion("Seksuel chikane")) + 
+  geom_point(aes(x=Group, y = Score), color="brown") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) + 
+  ggtitle("Seksuel chikane")
+```
+
+# Fysisk anstrengende arbejde og Arbejdstid
+På disse parametre scorer mænd generelt højest, dvs. de arbejder mest, har mest natarbejde og har de mest fysisk krævende jobs.
+```{r}
+ggplot(subset(konalder, Question.Label == "Fysisk hårdt arbejde")) + 
+  geom_point(aes(x=Alder, y = Score, color = Køn)) + 
+  ggtitle("Fysisk hårdt arbejde")
+
+ggplot(subset(konalder, Question.Label == "Typiske løft på 16 kg eller derover")) + 
+  geom_point(aes(x=Alder, y = Score, color = Køn)) + 
+  ggtitle("Typiske løft på 16 kg eller derover")
+
+ggplot(subset(konalder, Question.Label == "Skubber eller trækker mindst 1/4 af tiden")) + 
+  geom_point(aes(x=Alder, y = Score, color = Køn)) + 
+  ggtitle("Skubber eller trækker mindst 1/4 af tiden")
+
+ggplot(subset(konalder, Question.Label == "Bærer eller løfter mindst 1/4 af tiden")) + 
+  geom_point(aes(x=Alder, y = Score, color = Køn)) + 
+  ggtitle("Bærer eller løfter mindst 1/4 af tiden")
+
+ggplot(subset(konalder, Question.Label == "Nødvendigt at beskytte sig mod støj mindst 1/4 af tiden")) + 
+  geom_point(aes(x=Alder, y = Score, color = Køn)) + 
+  ggtitle("Nødvendigt at beskytte sig mod støj mindst 1/4 af tiden")
+
+
+
+ggplot(subset(konalder, Question.Label == "Ugentlig arbejdstid")) + 
+  geom_point(aes(x=Alder, y = Score, color = Køn)) + 
+  ggtitle("Ugentlig arbejdstid")
+
+ggplot(subset(konalder, Question.Label == "Natarbejde")) + 
+  geom_point(aes(x=Alder, y = Score, color = Køn)) + 
+  ggtitle("Natarbejde")
+
+```
+
+Kigger vi på de forskellige brancher, ser vi igen at der er en tendens til at klassisk mandepræget jobs scorer højere.
+```{r}
+ggplot(subsetFromQuestion("Fysisk hårdt arbejde")) + 
+  geom_point(aes(x=Group, y = Score), color="brown") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) + 
+  ggtitle("Fysisk hårdt arbejde")
+
+ggplot(subsetFromQuestion("Typiske løft på 16 kg eller derover")) + 
+  geom_point(aes(x=Group, y = Score), color="brown") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) + 
+  ggtitle("Typiske løft på 16 kg eller derover")
+
+ggplot(subsetFromQuestion("Skubber eller trækker mindst 1/4 af tiden")) + 
+  geom_point(aes(x=Group, y = Score), color="brown") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) + 
+  ggtitle("Skubber eller trækker mindst 1/4 af tiden")
+
+ggplot(subsetFromQuestion("Bærer eller løfter mindst 1/4 af tiden")) + 
+  geom_point(aes(x=Group, y = Score), color="brown") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) + 
+  ggtitle("Bærer eller løfter mindst 1/4 af tiden")
+
+ggplot(subsetFromQuestion("Nødvendigt at beskytte sig mod støj mindst 1/4 af tiden")) + 
+  geom_point(aes(x=Group, y = Score), color="brown") + 
+theme(axis.text.x = element_text(angle = 90, hjust = 1)) + 
+  ggtitle("Nødvendigt at beskytte sig mod støj mindst 1/4 af tiden")
+
+
+
+
+ggplot(subsetFromQuestion("Ugentlig arbejdstid")) + 
+  geom_point(aes(x=Group, y = Score), color="brown") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) + 
+  ggtitle("Ugentlig arbejdstid")
+
+ggplot(subsetFromQuestion("Natarbejde")) + 
+  geom_point(aes(x=Group, y = Score), color="brown") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) + 
+  ggtitle("Natarbejde")
+
+```
+
+# Overordnet helbred
+I tråd med hvad vi så tidligere, er det mentale helbred for mænd i gennemsnit bedre end for kvinder. Det er desuden opadgående jo ældre folk er. Mænd har mere fysisk krævende arbejde end kvinder og har samtidig et  bedre selvvurderet helbred.
+```{r}
+grid.arrange(
+ggplot(subset(konalder, Question.Label == "Mental sundhed")) + 
+  geom_point(aes(x=Alder, y = Score, color = Køn)) + 
+  ggtitle("Mental sundhed")
+,
+ggplot(subset(konalder, Question.Label == "Selvvurderet helbred")) + 
+  geom_point(aes(x=Alder, y = Score, color = Køn)) + 
+  ggtitle("Selvvurderet helbred")
+)
+```
+
+Nogen af de brancher, som scorer lavest på metal sundhed er også dem som generelt forventes at være dårligere betalt, mens ledere ligger i top.
+Læger score pudsigt nok højt på selvvurderet helbred. Ledere ligger også godt på selvvurderet helbred.
+
+```{r}
+ggplot(subsetFromQuestion("Mental sundhed")) + 
+  geom_point(aes(x=Group, y = Score), color="brown") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) + 
+  ggtitle("Mental sundhed")
+
+ggplot(subsetFromQuestion("Selvvurderet helbred")) + 
+  geom_point(aes(x=Group, y = Score), color="brown") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) + 
+  ggtitle("Selvvurderet helbred")
+
+```
+
+
+
+
+
+
+
+
